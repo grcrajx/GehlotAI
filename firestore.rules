@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, format: email)
+    //   - displayName: string
+    //   - photoURL: string
+    //   - createdAt: timestamp
+    //
+    // Collection: chat_sessions
+    // Document ID: {sessionId}
+    // Fields:
+    //   - userId: string (required) - Owner of the chat
+    //   - title: string (required)
+    //   - subject: string (required, enum)
+    //   - createdAt: timestamp
+    //   - lastMessageAt: timestamp
+    //
+    // Collection: chat_sessions/{sessionId}/messages
+    // Document ID: {messageId}
+    // Fields:
+    //   - sessionId: string (required)
+    //   - userId: string (required)
+    //   - role: string (required, enum: user/assistant)
+    //   - content: string (required)
+    //   - createdAt: timestamp
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isRecent(time) {
+      return time > request.time - duration.value(5, 'm') && time <= request.time;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+             isRecent(data.createdAt);
+    }
+
+    function isValidChatSession(data) {
+      return data.keys().hasAll(['userId', 'title', 'subject', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.subject in ['General', 'Math', 'Science', 'English', 'History'] &&
+             isRecent(data.createdAt);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['sessionId', 'userId', 'role', 'content', 'createdAt']) &&
+             data.role in ['user', 'assistant'] &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 10000 &&
+             isRecent(data.createdAt);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /chat_sessions/{sessionId} {
+      allow read, write: if true;
+
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}
